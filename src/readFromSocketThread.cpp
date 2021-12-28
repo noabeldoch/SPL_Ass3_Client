@@ -7,25 +7,111 @@
 readFromSocketThread::readFromSocketThread(ConnectionHandler &ch): connectionHandler(ch) {}
 
 void readFromSocketThread::run() {
-    while (true) {
-        // We can use one of three options to read data from the server:
-        // 1. Read a fixed number of characters
-        // 2. Read a line (up to the newline character using the getline() buffered reader
-        // 3. Read up to the null character
+    while (!connectionHandler.getServerApprovedLogout()) {
         std::string answer;
-        // Get back an answer: by using the expected number of bytes (len bytes + newline delimiter)
-        // We could also use: connectionHandler.getline(answer) and then get the answer without the newline char at the end
-        if (!connectionHandler.getLine(answer)) {
-            break;
+        char bytes[2];
+        connectionHandler.getBytes(bytes,2);
+        short firstOP = connectionHandler.bytesToShort(bytes,0);
+
+        //Error
+        if(firstOP==11) {
+            connectionHandler.getBytes(bytes,2);
+            short secondOP = connectionHandler.bytesToShort(bytes,0);
+            answer = "ERROR " + std::to_string(secondOP) + "\n";
+
+            //Server didn't approve logout
+            if (secondOP==3) {
+                connectionHandler.setWaitForServerLogoutApproval(false);
+            }
         }
 
-        int len=answer.length();
-        // A C string must end with a 0 char delimiter.  When we filled the answer buffer from the socket
-        // we filled up to the \n char - we must make sure now that a 0 char is also present. So we truncate last character.
-        answer.resize(len-1);
-        std::cout << answer << std::endl;
-        if (answer == "Ack 3") {
-            break;
+        //Notification
+        else if(firstOP==9) {
+
+            answer = "NOTIFICATION ";
+
+            //Byte representing PM/Public
+            char byte[1];
+            connectionHandler.getBytes(byte,1);
+            short action = (short) ((byte[0] & 0xff) << 8);
+            if (action==1) {
+                answer = answer + "Public ";
+            }
+            else {
+                answer = answer + "PM ";
+            }
+
+            //Posting user
+            connectionHandler.getBytes(byte,1);
+            while (byte[0]!='\0') {
+                answer = answer + byte;
+                connectionHandler.getBytes(byte,1);
+            }
+            answer = answer + " ";
+
+            //Content
+            connectionHandler.getBytes(byte,1);
+            while (byte[0]!='\0') {
+                answer = answer + byte;
+                connectionHandler.getBytes(byte,1);
+            }
+            answer = answer + "\n";
         }
+
+        //ACK
+        else {
+            connectionHandler.getBytes(bytes,2);
+            short secondOP = connectionHandler.bytesToShort(bytes,0);
+            answer = "ACK " + std::to_string(secondOP) + " ";
+
+            //Follow
+            if (secondOP==4) {
+
+                //Username
+                char byte[1];
+                connectionHandler.getBytes(byte,1);
+                while (byte[0]!='\0') {
+                    answer = answer + byte;
+                    connectionHandler.getBytes(byte,1);
+                }
+                answer = answer + "\n";
+            }
+
+            //Stat, Logstat
+            else if (secondOP==8 || secondOP==7) {
+
+                //Age
+                connectionHandler.getBytes(bytes,2);
+                short age = connectionHandler.bytesToShort(bytes,0);
+                answer = answer + std::to_string(age) + " ";
+
+                //NumPosts
+                connectionHandler.getBytes(bytes,2);
+                short NumPosts = connectionHandler.bytesToShort(bytes,0);
+                answer = answer + std::to_string(NumPosts) + " ";
+
+                //NumFollowers
+                connectionHandler.getBytes(bytes,2);
+                short NumFollowers = connectionHandler.bytesToShort(bytes,0);
+                answer = answer + std::to_string(NumFollowers) + " ";
+
+                //NumFollowing
+                connectionHandler.getBytes(bytes,2);
+                short NumFollowing = connectionHandler.bytesToShort(bytes,0);
+                answer = answer + std::to_string(NumFollowing) + "\n";
+            }
+
+            //Generic ACK
+            else {
+                answer.resize(answer.length()-1); // Cancel the " "
+                answer = answer + "\n";
+
+                //Server approved logout
+                if (secondOP==3) {
+                    connectionHandler.setServerApprovedLogout(true);
+                }
+            }
+        }
+        std::cout << answer << std::endl;
     }
 }

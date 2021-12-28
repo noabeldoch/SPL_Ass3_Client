@@ -58,6 +58,15 @@ public:
 
     void setWaitForServerLogoutApproval(bool answer);
 
+    std::vector<std::string> splitString(std::string&);
+
+    short getOP(std::basic_string<char> &basicString);
+
+    void shortToBytes(short num, char *bytesArr, int from);
+
+    void insertString(char *bytes, int from, std::string &s);
+
+    short bytesToShort(char *bytesarray, int from);
 
 }; //class ConnectionHandler
 
