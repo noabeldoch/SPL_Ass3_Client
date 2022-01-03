@@ -35,6 +35,7 @@ int main (int argc, char *argv[]) {
             std::cin.getline(buf,
                              bufsize); //Gets input from keyboard and stores in buf array, while the bufsize is the max size
             std::string line(buf);
+            std::string copyLine = line;
             std::vector<std::string> input = connectionHandler.splitString(line);
             int outputLength;
             short op = connectionHandler.getOP(input[0]);
@@ -51,7 +52,7 @@ int main (int argc, char *argv[]) {
             }
 
             //Login
-            else if (op == 1) {
+            else if (op == 2) {
                 outputLength = input[1].size() + input[2].size() + 2 + 2 + 1 + 1; //username + password + 2(for op) + 2(for '0') + 1(for captcha) + 1(for ';')
                 char output[outputLength];
                 connectionHandler.shortToBytes(op, output, 0);
@@ -77,8 +78,8 @@ int main (int argc, char *argv[]) {
                 connectionHandler.sendBytes(output, outputLength);
             }
 
-            //Post, Stat
-            else if (op == 5 || op == 8 || op==12) {
+            //Stat, Block
+            else if (op == 8 || op==12) {
                 outputLength = input[1].size() + 2 + 1 + 1; //string + 2(opcode) + 1('\0') + 1(';')
                 char output[outputLength];
                 connectionHandler.shortToBytes(op, output, 0); //opcode
@@ -87,8 +88,8 @@ int main (int argc, char *argv[]) {
                 connectionHandler.sendBytes(output, outputLength);
             }
 
-            //PM, Register
-            else if (op == 6 || op == 1) {
+            //Register
+            else if (op == 1) {
                 outputLength = input[1].size() + input[2].size() + input[3].size() + 2 + 3 + 1; //username + string + string + 2(opcode) + 3('\0') + 1(';')
                 char output[outputLength];
                 connectionHandler.shortToBytes(op, output, 0); //opcode
@@ -100,6 +101,43 @@ int main (int argc, char *argv[]) {
                 output[outputLength - 1] = '\n';
                 connectionHandler.sendBytes(output, outputLength);
             }
+
+            //PM
+            else if (op==6) {
+                //Split function
+                int indexOfFirstSpace = copyLine.find_first_of(' ');
+                int indexOfSecondSpace = copyLine.find_first_of( ' ', indexOfFirstSpace+1);
+                std::string username = copyLine.substr(indexOfFirstSpace+1, indexOfSecondSpace-indexOfFirstSpace-1);
+                std::string content = copyLine.substr(indexOfSecondSpace+1, copyLine.length()-indexOfSecondSpace-1);
+
+                //Sum size (without date, without last /0
+                outputLength = username.size() + content.size() + 2 + 2 + 1; // 2(op) + 2(\0) + 1(\n)
+
+                //insert the op, name and string as bytes
+                char output[outputLength];
+                connectionHandler.shortToBytes(op, output, 0); //opcode
+                connectionHandler.insertString(output, 2, username); //username + '\0'
+                int nextPos = 2 + username.size() + 1;
+                connectionHandler.insertString(output, nextPos, content); //content + '\0'
+                output[outputLength - 1] = '\n';
+                connectionHandler.sendBytes(output, outputLength);
+            }
+
+            //POST
+            else if(op==5) {
+                int indexOfFirstSpace = copyLine.find_first_of(' ');
+                std::string content = copyLine.substr(indexOfFirstSpace+1, copyLine.length()-indexOfFirstSpace-1);
+
+                outputLength = content.size() + 2 + 1 + 1; // 2(op) + 1(\0) + 1(\n)
+
+                char output[outputLength];
+                connectionHandler.shortToBytes(op, output, 0); //opcode
+                connectionHandler.insertString(output, 2, content); //content + '\0'
+                output[outputLength - 1] = '\n';
+                connectionHandler.sendBytes(output, outputLength);
+            }
+
+            input.assign(input.size(), "0");
         }
     }
     return 0;
